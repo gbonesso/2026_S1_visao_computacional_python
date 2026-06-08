@@ -245,3 +245,210 @@ def agrupa_olhos_abertos(df):
     open_eye_periods['id'] = open_eye_periods.index + 1
 
     return open_eye_periods
+
+def calculate_confusion_matrix(df_intersection_tag_to_app, df_intersection_app_to_tag, df_intersection_open_eyes_tag_to_app):
+    """
+    Calculates the confusion matrix based on intersection results from dataframes.
+
+    Args:
+        df_intersection_tag_to_app: DataFrame containing intersections from tag to app.
+                                    True Positives are rows with intersection.
+                                    False Negatives are rows with 'no intersection'.
+        df_intersection_app_to_tag: DataFrame containing intersections from app to tag.
+                                    False Positives are rows with 'no intersection'.
+        df_intersection_open_eyes_tag_to_app: DataFrame containing intersections of open eyes (tag) to app blinks.
+                                             True Negatives are rows with 'no intersection'.
+
+    Returns:
+        A dictionary or a confusion matrix object containing TP, FN, FP, TN counts.
+    """
+    # True Positives: Intersections in df_intersection_tag_to_app
+    true_positives = df_intersection_tag_to_app[
+        df_intersection_tag_to_app['target_start_frame'] != 'no intersection'
+    ].shape[0]
+
+    # False Negatives: No intersections in df_intersection_tag_to_app
+    false_negatives = df_intersection_tag_to_app[
+        df_intersection_tag_to_app['target_start_frame'] == 'no intersection'
+    ].shape[0]
+
+    # False Positives: No intersections in df_intersection_app_to_tag
+    false_positives = df_intersection_app_to_tag[
+        df_intersection_app_to_tag['target_start_frame'] == 'no intersection'
+    ].shape[0]
+
+    # True Negatives: No intersections in df_intersection_open_eyes_tag_to_app
+    true_negatives = df_intersection_open_eyes_tag_to_app[
+         df_intersection_open_eyes_tag_to_app['target_start_frame'] == 'no intersection'
+    ].shape[0]
+
+
+    # You can return these counts as a dictionary or use sklearn's confusion_matrix
+    # To use sklearn's confusion_matrix, you typically need true labels and predicted labels.
+    # Given the structure, returning counts might be more direct based on the request.
+    confusion_matrix_counts = {
+        'True Positives (TP)': true_positives,
+        'False Negatives (FN)': false_negatives,
+        'False Positives (FP)': false_positives,
+        'True Negatives (TN)': true_negatives
+    }
+
+    # Alternatively, to use sklearn.metrics.confusion_matrix, you would need to
+    # construct arrays of true and predicted labels based on the intersection logic.
+    # This would be more complex and might not directly map to the user's definition
+    # based on the three separate dataframes.
+
+    return confusion_matrix_counts
+
+def calculate_frame_based_confusion_matrix(df_intersection_tag_to_app, df_intersection_app_to_tag, df_intersection_open_eyes_tag_to_app):
+    """
+    Calculates the confusion matrix based on summing the duration of frames
+    within intersecting or non-intersecting periods of the intersection dataframes,
+    according to the user's definitions.
+
+    Args:
+        df_intersection_tag_to_app: DataFrame containing intersections from tag to app.
+                                    Used for TP and FN based on 'target_start_frame'.
+        df_intersection_app_to_tag: DataFrame containing intersections from app to tag.
+                                    Used for FP based on 'target_start_frame'.
+        df_intersection_open_eyes_tag_to_app: DataFrame containing intersections of open eyes (tag) to app blinks.
+                                             Used for TN based on 'target_start_frame'.
+
+
+    Returns:
+        A dictionary containing TP, FN, FP, TN counts based on frames.
+    """
+    # Calculate True Positives: Sum of frame durations for rows in df_intersection_tag_to_app with intersection
+    df_tp_periods = df_intersection_tag_to_app[
+        df_intersection_tag_to_app['target_start_frame'] != 'no intersection'
+    ].copy()
+    df_tp_periods['duration'] = df_tp_periods['end_frame'] - df_tp_periods['start_frame'] + 1
+    true_positives = df_tp_periods['duration'].sum()
+
+    # Calculate False Negatives: Sum of frame durations for rows in df_intersection_tag_to_app with 'no intersection'
+    df_fn_periods = df_intersection_tag_to_app[
+        df_intersection_tag_to_app['target_start_frame'] == 'no intersection'
+    ].copy()
+    df_fn_periods['duration'] = df_fn_periods['end_frame'] - df_fn_periods['start_frame'] + 1
+    false_negatives = df_fn_periods['duration'].sum()
+
+
+    # Calculate False Positives: Sum of frame durations for rows in df_intersection_app_to_tag with 'no intersection'
+    df_fp_periods = df_intersection_app_to_tag[
+        df_intersection_app_to_tag['target_start_frame'] == 'no intersection'
+    ].copy()
+    df_fp_periods['duration'] = df_fp_periods['end_frame'] - df_fp_periods['start_frame'] + 1
+    false_positives = df_fp_periods['duration'].sum()
+
+
+    # Calculate True Negatives: Sum of frame durations for rows in df_intersection_open_eyes_tag_to_app with 'no intersection'
+    df_tn_periods = df_intersection_open_eyes_tag_to_app[
+         df_intersection_open_eyes_tag_to_app['target_start_frame'] == 'no intersection'
+    ].copy()
+    df_tn_periods['duration'] = df_tn_periods['end_frame'] - df_tn_periods['start_frame'] + 1
+    true_negatives = df_tn_periods['duration'].sum()
+
+
+    confusion_matrix_counts = {
+        'True Positives (TP)': int(true_positives),
+        'False Negatives (FN)': int(false_negatives),
+        'False Positives (FP)': int(false_positives),
+        'True Negatives (TN)': int(true_negatives)
+    }
+
+    return confusion_matrix_counts
+
+def calculate_frame_based_confusion_matrix_by_file_number(df_intersection_tag_to_app, df_intersection_app_to_tag, df_intersection_open_eyes_tag_to_app):
+    """
+    Calculates the confusion matrix based on summing the duration of frames
+    within intersecting or non-intersecting periods of the intersection dataframes,
+    according to the user's definitions, providing a row for each file number.
+
+    Args:
+        df_intersection_tag_to_app: DataFrame containing intersections from tag to app.
+                                    Used for TP and FN based on 'target_start_frame'.
+                                    Should include 'file_number' column.
+        df_intersection_app_to_tag: DataFrame containing intersections from app to tag.
+                                    Used for FP based on 'target_start_frame'.
+                                    Should include 'file_number' column.
+        df_intersection_open_eyes_tag_to_app: DataFrame containing intersections of open eyes (tag) to app blinks.
+                                             Used for TN based on 'target_start_frame'.
+                                             Should include 'file_number' column.
+
+
+    Returns:
+        A DataFrame containing TP, FN, FP, TN counts based on frames for each file_number.
+    """
+    results = []
+
+    # Get all unique file numbers from the input dataframes
+    all_file_numbers = pd.concat([
+        df_intersection_tag_to_app['file_number'],
+        df_intersection_app_to_tag['file_number'],
+        df_intersection_open_eyes_tag_to_app['file_number']
+    ]).unique()
+
+    for file_number in all_file_numbers:
+        # Filter dataframes for the current file number
+        df_tag_to_app_file = df_intersection_tag_to_app[
+            df_intersection_tag_to_app['file_number'] == file_number
+        ].copy()
+        df_app_to_tag_file = df_intersection_app_to_tag[
+            df_intersection_app_to_tag['file_number'] == file_number
+        ].copy()
+        df_open_eyes_file = df_intersection_open_eyes_tag_to_app[
+            df_intersection_open_eyes_tag_to_app['file_number'] == file_number
+        ].copy()
+
+        # Calculate True Positives for the current file: Sum of frame durations for rows in df_tag_to_app_file with intersection
+        df_tp_periods_file = df_tag_to_app_file[
+            df_tag_to_app_file['target_start_frame'] != 'no intersection'
+        ].copy()
+        if not df_tp_periods_file.empty:
+            df_tp_periods_file['duration'] = df_tp_periods_file['end_frame'] - df_tp_periods_file['start_frame'] + 1
+            true_positives = df_tp_periods_file['duration'].sum()
+        else:
+            true_positives = 0
+
+
+        # Calculate False Negatives for the current file: Sum of frame durations for rows in df_tag_to_app_file with 'no intersection'
+        df_fn_periods_file = df_tag_to_app_file[
+            df_tag_to_app_file['target_start_frame'] == 'no intersection'
+        ].copy()
+        if not df_fn_periods_file.empty:
+            df_fn_periods_file['duration'] = df_fn_periods_file['end_frame'] - df_fn_periods_file['start_frame'] + 1
+            false_negatives = df_fn_periods_file['duration'].sum()
+        else:
+            false_negatives = 0
+
+
+        # Calculate False Positives for the current file: Sum of frame durations for rows in df_app_to_tag_file with 'no intersection'
+        df_fp_periods_file = df_app_to_tag_file[
+            df_app_to_tag_file['target_start_frame'] == 'no intersection'
+        ].copy()
+        if not df_fp_periods_file.empty:
+            df_fp_periods_file['duration'] = df_fp_periods_file['end_frame'] - df_fp_periods_file['start_frame'] + 1
+            false_positives = df_fp_periods_file['duration'].sum()
+        else:
+            false_positives = 0
+
+
+        # Calculate True Negatives for the current file: Sum of frame durations for rows in df_open_eyes_file with 'no intersection'
+        df_tn_periods_file = df_open_eyes_file[
+             df_open_eyes_file['target_start_frame'] == 'no intersection'
+        ].copy()
+        if not df_tn_periods_file.empty:
+            df_tn_periods_file['duration'] = df_tn_periods_file['end_frame'] - df_tn_periods_file['start_frame'] + 1
+            true_negatives = df_tn_periods_file['duration'].sum()
+        else:
+            true_negatives = 0
+
+        results.append({
+            'file_number': file_number,
+            'True Positives (TP)': int(true_positives),
+            'False Negatives (FN)': int(false_negatives),
+            'False Positives (FP)': int(false_positives),
+            'True Negatives (TN)': int(true_negatives)
+        })
+
+    return pd.DataFrame(results)

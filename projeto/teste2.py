@@ -5,9 +5,9 @@ from pathlib import Path
 
 from pre_processamento import get_iris_mask, preprocess_frame
 
-video_path = './projeto/videos/7_Isabella_Pre_2025-04-20T11_06_49_247900_output.MP4'
-output_path = './projeto/videos/7_Isabella_Pre_2025-04-20T11_06_49_247900_output_montage.mp4'
-overlay_output_path = './projeto/videos/7_Isabella_Pre_2025-04-20T11_06_49_247900_output_iris_overlay.mp4'
+video_path = './projeto/videos/1_Isabelle_RT_Pre_2025-04-02T13_01_53_362128_output.mp4'
+output_path = './projeto/videos/1_Isabelle_RT_Pre_2025-04-02T13_01_53_362128_output_montage.mp4'
+overlay_output_path = './projeto/videos/1_Isabelle_RT_Pre_2025-04-02T13_01_53_362128_output_iris_overlay.mp4'
 csv_path = str(Path(video_path).with_name(f"{Path(video_path).stem}_abertura.csv"))
 
 # Open the video file
