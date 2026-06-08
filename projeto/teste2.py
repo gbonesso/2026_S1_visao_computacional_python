@@ -13,6 +13,25 @@ csv_path = str(Path(video_path).with_name(f"{Path(video_path).stem}_abertura.csv
 # Open the video file
 cap = cv2.VideoCapture(video_path)
 
+def make_panel(image, label, size, is_gray=False):
+    if is_gray:
+        panel = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    else:
+        panel = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+    panel = cv2.resize(panel, size, interpolation=cv2.INTER_AREA)
+    cv2.putText(
+        panel,
+        label,
+        (10, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (0, 255, 0),
+        1,
+        cv2.LINE_AA,
+    )
+    return panel
+
 # Check if video opened successfully
 if not cap.isOpened():
     print("Error: Could not open video.")
@@ -37,24 +56,7 @@ else:
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow(['frame', 'left_opening', 'right_opening'])
 
-    def make_panel(image, label, size, is_gray=False):
-        if is_gray:
-            panel = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-        else:
-            panel = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-
-        panel = cv2.resize(panel, size, interpolation=cv2.INTER_AREA)
-        cv2.putText(
-            panel,
-            label,
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (0, 255, 0),
-            1,
-            cv2.LINE_AA,
-        )
-        return panel
+    
 
     def draw_dotted_hline(image, y, color, dash_length=12, gap_length=8, thickness=1):
         height, width = image.shape[:2]

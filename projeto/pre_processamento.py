@@ -90,10 +90,10 @@ def get_iris_mask(eye_frame):
     img_gray = cv2.cvtColor(eye_frame, cv2.COLOR_RGB2GRAY)
 
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    img_gray = clahe.apply(img_gray)
+    img_clahe = clahe.apply(img_gray)
 
     # Use GaussianBlur as in EyeOpenEstimator and apply before upscaling
-    img_gray_blurred = cv2.GaussianBlur(img_gray, (5,5), 0)
+    img_gray_blurred = cv2.GaussianBlur(img_clahe, (5,5), 0)
 
     # Upscale img_gray_blurred
     upscale_factor = 2
@@ -147,7 +147,7 @@ def get_iris_mask(eye_frame):
         # Get the 10th percentile as the top edge of the iris
         iris_top = np.percentile(iris_y_coords, 5)
 
-    return iris_mask, iris_bottom, iris_top
+    return iris_mask, iris_bottom, iris_top, img_clahe
 
 def get_iris_mask_v2(eye_frame, use_upscale=False, upscale_factor=2, dilate_iterations=1):
     # Create img_gray from eye_frame
