@@ -1,2 +1,6 @@
 .DS_Store
 .venv3_14/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

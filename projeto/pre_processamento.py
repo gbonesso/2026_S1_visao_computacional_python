@@ -122,21 +122,39 @@ def get_iris_mask(eye_frame):
         255, # Max value for binary thresholding
         cv2.THRESH_BINARY_INV
     )
-    iris_mask = cv2.bitwise_and(iris_mask, mask)
+    iris_mask_threshold = cv2.bitwise_and(iris_mask, mask)
 
     # Expand the final selected region slightly to increase detected area
     dil_kernel = np.ones((5, 5), np.uint8)
-    iris_mask = cv2.dilate(iris_mask, dil_kernel, iterations=2)
+    iris_mask_dilated = cv2.dilate(
+        iris_mask_threshold, 
+        dil_kernel, 
+        iterations=2 # Testar com 1 ou 2 para ver o impacto na abertura detectada, 
+        # mas cuidado para não dilatar demais e incluir áreas externas ao olho
+    )
 
     # Light morphology: connect nearby fragments without exploding the region
-    kernel = np.ones((9, 9), np.uint8)
-    iris_mask = cv2.morphologyEx(iris_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    kernel = np.ones((9, 9), np.uint8) # A larger kernel can help connect fragmented edges of the iris, but be careful not to overdo it
+    # Testar com kernels menores e com menos iterações para evitar que a região cresça demais e inclua áreas externas ao olho
+    iris_mask_morph_close = cv2.morphologyEx(
+        iris_mask_dilated, 
+        cv2.MORPH_CLOSE, # Operação de fechamento para conectar fragmentos próximos do contorno da íris, 
+        # mas cuidado para não fechar demais e incluir áreas externas ao olho
+        kernel, 
+        iterations=2
+    )
 
-    iris_mask = keep_largest_component(iris_mask)
+    iris_mask_morph_close_largest = keep_largest_component(iris_mask_morph_close)
 
     # Remove any small disconnected leftovers after the largest component was selected.
-    iris_mask = cv2.morphologyEx(iris_mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), iterations=1)
-    iris_mask = keep_largest_component(iris_mask)
+    iris_mask_morph_open = cv2.morphologyEx(
+        iris_mask_morph_close_largest, 
+        cv2.MORPH_OPEN, # Operação de abertura para remover pequenos fragmentos desconectados que podem ter sobrado 
+        # após selecionar o maior componente, mas cuidado para não abrir demais e fragmentar a região da íris
+        np.ones((3, 3), np.uint8), 
+        iterations=1
+    )
+    iris_mask = keep_largest_component(iris_mask_morph_open)
 
     # Find the y-coordinates of the iris pixels
     iris_y_coords = np.where(iris_mask > 0)[0]
@@ -147,7 +165,8 @@ def get_iris_mask(eye_frame):
         # Get the 10th percentile as the top edge of the iris
         iris_top = np.percentile(iris_y_coords, 5)
 
-    return iris_mask, iris_bottom, iris_top, img_clahe
+    return iris_mask, iris_bottom, iris_top, img_clahe, img_gray_blurred, img_gray_upscaled, iris_mask_threshold, \
+        iris_mask_dilated, iris_mask_morph_close, iris_mask_morph_open
 
 def get_iris_mask_v2(eye_frame, use_upscale=False, upscale_factor=2, dilate_iterations=1):
     # Create img_gray from eye_frame
