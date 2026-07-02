@@ -5,7 +5,8 @@ import numpy as np
 from pathlib import Path
 
 from pre_processamento import get_iris_mask, preprocess_frame
-from teste2 import make_panel
+from processa_video_bruto_passo1 import make_panel
+from pos_processamento import get_angle_from_mask, get_opening_from_mask, rotate_image_and_mask
 
 
 def draw_dotted_hline(image, y, color, dash_length=12, gap_length=8, thickness=1):
@@ -48,13 +49,16 @@ def annotate_iris_panel(panel, iris_mask, iris_top, iris_bottom):
 
     return panel
 
-video_path = './projeto/videos/15_Bruna_PR_Pre_2025-04-20T09_53_50_734327_output.MP4'
+#video_path = './projeto/videos/15_Bruna_PR_Pre_2025-04-20T09_53_50_734327_output.MP4'
+#video_frame = 65
+video_path = './projeto/videos/30_Nicolas_PR_Pre_2025-04-19T20_24_11_016457_output.MP4'
+video_frame = 514
 
 # Open the video file
 cap = cv2.VideoCapture(video_path)
 
 # Vai para o frame 65
-cap.set(cv2.CAP_PROP_POS_FRAMES, 65)
+cap.set(cv2.CAP_PROP_POS_FRAMES, video_frame)
 # Check if video opened successfully
 if not cap.isOpened():
     print("Error: Could not open video.")
@@ -91,6 +95,31 @@ else:
 
         left_opening = max(0.0, float(left_eye_iris_bottom) - float(left_eye_iris_top))
         right_opening = max(0.0, float(right_eye_iris_bottom) - float(right_eye_iris_top))
+
+        # Calculate the angles of the iris masks
+        left_angle = get_angle_from_mask(left_iris_mask)
+        right_angle = get_angle_from_mask(right_iris_mask)
+
+        # Rotate the images and masks based on the calculated angles
+        left_img_gray_upscaled_rotated, left_iris_mask_rotated = rotate_image_and_mask(
+            left_img_gray_upscaled, left_iris_mask_morph_open, -left_angle
+        )
+        right_img_gray_upscaled_rotated, right_iris_mask_rotated = rotate_image_and_mask(
+            right_img_gray_upscaled, right_iris_mask_morph_open, -right_angle
+        )
+
+        # Get the new top and bottom coordinates of the iris masks after rotation
+        left_opening_after_rotation = get_opening_from_mask(left_iris_mask_rotated)
+        right_opening_after_rotation = get_opening_from_mask(right_iris_mask_rotated)
+
+        # Calculate the angles of the rotated iris masks
+        left_angle_rotated = get_angle_from_mask(left_iris_mask_rotated)
+        right_angle_rotated = get_angle_from_mask(right_iris_mask_rotated)
+
+        print(f"Left eye opening: {left_opening:.1f}, angle: {left_angle:.2f} degrees")
+        print(f"Right eye opening: {right_opening:.1f}, angle: {right_angle:.2f} degrees")
+        print(f"Left eye opening after rotation: {left_opening_after_rotation:.1f}, angle: {left_angle_rotated:.2f} degrees")
+        print(f"Right eye opening after rotation: {right_opening_after_rotation:.1f}, angle: {right_angle_rotated:.2f} degrees")
 
         # Display the first frame
         plt.imshow(frame_rgb)
@@ -161,6 +190,18 @@ else:
         plt.axis('off') # Hide axes for better image display
         plt.show()
 
+        # Display the left eye with final iris mask applied, both rotated
+        left_img_gray_upscaled_rotated_rgb = cv2.cvtColor(left_img_gray_upscaled_rotated, cv2.COLOR_GRAY2RGB)
+        left_iris_final_overlay_rotated = left_img_gray_upscaled_rotated_rgb.copy()
+        left_iris_final_overlay_rotated[left_iris_mask_rotated > 0] = [255, 0, 0]
+        left_iris_final_overlay_rotated = cv2.addWeighted(left_img_gray_upscaled_rotated_rgb, 0.7, left_iris_final_overlay_rotated, 0.3, 0)
+        #left_iris_final_overlay_rotated = left_img_gray_upscaled_rgb.copy()
+
+        plt.imshow(left_iris_final_overlay_rotated)
+        plt.title("Upscaled + Iris Mask Final Rotated")
+        plt.axis('off') # Hide axes for better image display
+        plt.show()
+
         # Display the left iris mask with annotations like teste2.py
         left_iris_mask_panel = make_panel(
             left_iris_final_overlay, 
@@ -178,9 +219,6 @@ else:
         plt.title("Left iris mask annotated")
         plt.axis('off')
         plt.show()
-
-        
-        
 
     else:
         print("Error: Could not read the frame.")

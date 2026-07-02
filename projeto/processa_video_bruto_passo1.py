@@ -5,9 +5,9 @@ from pathlib import Path
 
 from pre_processamento import get_iris_mask, preprocess_frame
 
-video_path = './projeto/videos/1_Isabelle_RT_Pre_2025-04-02T13_01_53_362128_output.mp4'
-output_path = './projeto/videos/1_Isabelle_RT_Pre_2025-04-02T13_01_53_362128_output_montage.mp4'
-overlay_output_path = './projeto/videos/1_Isabelle_RT_Pre_2025-04-02T13_01_53_362128_output_iris_overlay.mp4'
+video_path = './projeto/videos2/30_Nicolas_PR_Pre_2025-04-19T20_24_11_016457_output.mp4'
+output_path = './projeto/videos2/30_Nicolas_PR_Pre_2025-04-19T20_24_11_016457_montage.mp4'
+overlay_output_path = './projeto/videos2/30_Nicolas_PR_Pre_2025-04-19T20_24_11_016457_output_iris_overlay.mp4'
 csv_path = str(Path(video_path).with_name(f"{Path(video_path).stem}_abertura.csv"))
 
 # Open the video file
@@ -31,6 +31,94 @@ def make_panel(image, label, size, is_gray=False):
         cv2.LINE_AA,
     )
     return panel
+
+def draw_dotted_hline(image, y, color, dash_length=12, gap_length=8, thickness=1):
+        height, width = image.shape[:2]
+        y = int(round(y))
+        if y < 0 or y >= height:
+            return image
+
+        x = 0
+        while x < width:
+            x_end = min(x + dash_length, width)
+            cv2.line(image, (x, y), (x_end, y), color, thickness, cv2.LINE_AA)
+            x += dash_length + gap_length
+
+        return image
+
+def annotate_iris_panel(panel, iris_mask, iris_top, iris_bottom):
+    mask_height = iris_mask.shape[0]
+    panel_height = panel.shape[0]
+
+    if mask_height > 0:
+        top_y = (float(iris_top) / mask_height) * panel_height
+        bottom_y = (float(iris_bottom) / mask_height) * panel_height
+
+        draw_dotted_hline(panel, top_y, (0, 255, 255))
+        draw_dotted_hline(panel, bottom_y, (255, 0, 255))
+
+        opening = max(0.0, float(iris_bottom) - float(iris_top))
+        cv2.putText(
+            panel,
+            f'Opening: {opening:.1f}',
+            (10, 50), # Posição (x, y) do texto
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4, # Tamanho da fonte
+            (0, 255, 255),
+            1, # Espessura da linha do texto
+            cv2.LINE_AA,
+        )
+
+    return panel
+
+def overlay_iris_mask(eye_rgb, iris_mask, iris_top, iris_bottom, eye_label, color=(255, 0, 0), alpha=0.35):
+    overlay = eye_rgb.copy()
+    if iris_mask.size == 0:
+        return overlay
+
+    source_mask_height = iris_mask.shape[0]
+
+    if iris_mask.shape[:2] != eye_rgb.shape[:2]:
+        #print(f"Resizing iris_mask from {iris_mask.shape[:2]} to {eye_rgb.shape[:2]}")
+        iris_mask = cv2.resize(
+            iris_mask,
+            (eye_rgb.shape[1], eye_rgb.shape[0]),
+            interpolation=cv2.INTER_NEAREST,
+        )
+
+    mask = iris_mask > 0
+    if not np.any(mask):
+        return overlay
+
+    color_layer = np.zeros_like(eye_rgb)
+    color_layer[:, :] = color
+    overlay[mask] = (
+        eye_rgb[mask].astype(np.float32) * (1.0 - alpha)
+        + color_layer[mask].astype(np.float32) * alpha
+    ).astype(np.uint8)
+
+    top_y = 0.0
+    bottom_y = 0.0
+    if source_mask_height > 0:
+        scale_y = float(eye_rgb.shape[0]) / float(source_mask_height)
+        top_y = float(iris_top) * scale_y
+        bottom_y = float(iris_bottom) * scale_y
+
+    draw_dotted_hline(overlay, top_y, (0, 255, 255))
+    draw_dotted_hline(overlay, bottom_y, (255, 0, 255))
+
+    opening = max(0.0, float(iris_bottom) - float(iris_top))
+    cv2.putText(
+        overlay,
+        f'{eye_label}: {opening:.1f}',
+        (10, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.4,
+        (255, 255, 255),
+        1,
+        cv2.LINE_AA,
+    )
+    return overlay
 
 # Check if video opened successfully
 if not cap.isOpened():
@@ -56,95 +144,6 @@ else:
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow(['frame', 'left_opening', 'right_opening'])
 
-    
-
-    def draw_dotted_hline(image, y, color, dash_length=12, gap_length=8, thickness=1):
-        height, width = image.shape[:2]
-        y = int(round(y))
-        if y < 0 or y >= height:
-            return image
-
-        x = 0
-        while x < width:
-            x_end = min(x + dash_length, width)
-            cv2.line(image, (x, y), (x_end, y), color, thickness, cv2.LINE_AA)
-            x += dash_length + gap_length
-
-        return image
-
-    def annotate_iris_panel(panel, iris_mask, iris_top, iris_bottom):
-        mask_height = iris_mask.shape[0]
-        panel_height = panel.shape[0]
-
-        if mask_height > 0:
-            top_y = (float(iris_top) / mask_height) * panel_height
-            bottom_y = (float(iris_bottom) / mask_height) * panel_height
-
-            draw_dotted_hline(panel, top_y, (0, 255, 255))
-            draw_dotted_hline(panel, bottom_y, (255, 0, 255))
-
-            opening = max(0.0, float(iris_bottom) - float(iris_top))
-            cv2.putText(
-                panel,
-                f'Opening: {opening:.1f}',
-                (10, 50), # Posição (x, y) do texto
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.4, # Tamanho da fonte
-                (0, 255, 255),
-                1, # Espessura da linha do texto
-                cv2.LINE_AA,
-            )
-
-        return panel
-
-    def overlay_iris_mask(eye_rgb, iris_mask, iris_top, iris_bottom, eye_label, color=(255, 0, 0), alpha=0.35):
-        overlay = eye_rgb.copy()
-        if iris_mask.size == 0:
-            return overlay
-
-        source_mask_height = iris_mask.shape[0]
-
-        if iris_mask.shape[:2] != eye_rgb.shape[:2]:
-            iris_mask = cv2.resize(
-                iris_mask,
-                (eye_rgb.shape[1], eye_rgb.shape[0]),
-                interpolation=cv2.INTER_NEAREST,
-            )
-
-        mask = iris_mask > 0
-        if not np.any(mask):
-            return overlay
-
-        color_layer = np.zeros_like(eye_rgb)
-        color_layer[:, :] = color
-        overlay[mask] = (
-            eye_rgb[mask].astype(np.float32) * (1.0 - alpha)
-            + color_layer[mask].astype(np.float32) * alpha
-        ).astype(np.uint8)
-
-        top_y = 0.0
-        bottom_y = 0.0
-        if source_mask_height > 0:
-            scale_y = float(eye_rgb.shape[0]) / float(source_mask_height)
-            top_y = float(iris_top) * scale_y
-            bottom_y = float(iris_bottom) * scale_y
-
-        draw_dotted_hline(overlay, top_y, (0, 255, 255))
-        draw_dotted_hline(overlay, bottom_y, (255, 0, 255))
-
-        opening = max(0.0, float(iris_bottom) - float(iris_top))
-        cv2.putText(
-            overlay,
-            f'{eye_label}: {opening:.1f}',
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.4,
-            (255, 255, 255),
-            1,
-            cv2.LINE_AA,
-        )
-        return overlay
-
     frame_count = 0
 
     while True:
@@ -164,8 +163,10 @@ else:
         left_edges = preprocess_frame(left_eye)
         right_edges = preprocess_frame(right_eye)
 
-        left_iris_mask, left_eye_iris_bottom, left_eye_iris_top = get_iris_mask(left_eye)
-        right_iris_mask, right_eye_iris_bottom, right_eye_iris_top = get_iris_mask(right_eye)
+        left_iris_mask, left_eye_iris_bottom, left_eye_iris_top, \
+            _, _, _, _, _, _, _ = get_iris_mask(left_eye)
+        right_iris_mask, right_eye_iris_bottom, right_eye_iris_top, \
+            _, _, _, _, _, _, _ = get_iris_mask(right_eye)
 
         left_opening = max(0.0, float(left_eye_iris_bottom) - float(left_eye_iris_top))
         right_opening = max(0.0, float(right_eye_iris_bottom) - float(right_eye_iris_top))
