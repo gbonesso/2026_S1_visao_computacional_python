@@ -13,7 +13,7 @@ def get_angle_from_mask(mask: np.ndarray) -> float:
     )
 
     if not contours:
-        raise ValueError("A máscara não contém contornos.")
+        return 0.0
 
     contour = max(contours, key=cv2.contourArea)
 
@@ -66,7 +66,8 @@ def get_top_bottom_opening_from_mask(
     y_coords = np.where(mask > 0)[0]
 
     if y_coords.size == 0:
-        raise ValueError("A máscara não contém pixels válidos.")
+        # raise ValueError("A máscara não contém pixels válidos.")
+        return 0.0, 0.0
 
     iris_bottom = np.percentile(y_coords, bottom_percentile)
     iris_top = np.percentile(y_coords, top_percentile)

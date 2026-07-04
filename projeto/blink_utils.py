@@ -175,10 +175,10 @@ def analyze_csv_blinks(file_path: str) -> pd.DataFrame:
     """
     df = pd.read_csv(file_path)
 
-    if 'right_opening' not in df.columns and 'right_opennning' in df.columns:
-        df = df.rename(columns={'right_opennning': 'right_opening'})
+    if 'left_opening_after_rotation' not in df.columns and 'right_opening_after_rotation' in df.columns:
+        df = df.rename(columns={'left_opening_after_rotation': 'right_opening_after_rotation'})
 
-    required_columns = {'frame', 'left_opening', 'right_opening'}
+    required_columns = {'frame', 'left_opening_after_rotation', 'right_opening_after_rotation'}
     missing_columns = required_columns - set(df.columns)
     if missing_columns:
         raise ValueError(f'Missing required columns in CSV: {sorted(missing_columns)}')
@@ -190,17 +190,17 @@ def analyze_csv_blinks(file_path: str) -> pd.DataFrame:
             return pd.Series(0.0, index=series.index)
         return (series - min_value) / (max_value - min_value)
 
-    df['left_opening'] = pd.to_numeric(df['left_opening'], errors='coerce')
-    df['right_opening'] = pd.to_numeric(df['right_opening'], errors='coerce')
+    df['left_opening_after_rotation'] = pd.to_numeric(df['left_opening_after_rotation'], errors='coerce')
+    df['right_opening_after_rotation'] = pd.to_numeric(df['right_opening_after_rotation'], errors='coerce')
     df['frame'] = pd.to_numeric(df['frame'], errors='coerce')
 
     df = df.sort_values('frame').reset_index(drop=True)
 
-    df['left_opening_norm'] = normalize_series(df['left_opening'])
-    df['right_opennning_norm'] = normalize_series(df['right_opening'])
+    df['left_opening_norm'] = normalize_series(df['left_opening_after_rotation'])
+    df['right_opening_norm'] = normalize_series(df['right_opening_after_rotation'])
 
     df['left_opening_med'] = df['left_opening_norm'].rolling(window=5, center=True, min_periods=1).mean()
-    df['right_opening_med'] = df['right_opennning_norm'].rolling(window=5, center=True, min_periods=1).mean()
+    df['right_opening_med'] = df['right_opening_norm'].rolling(window=5, center=True, min_periods=1).mean()
 
     frame_entities = []
     for _, row in df.iterrows():
