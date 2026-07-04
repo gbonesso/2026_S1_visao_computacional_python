@@ -210,8 +210,8 @@ def process_videos_in_directory(
 if __name__ == '__main__':
     process_videos_in_directory(
         './projeto/videos_input',
-        './projeto/videos_output_com_rotacao_com_med_ang_5',
+        './projeto/videos_output_com_rotacao_com_med_ang_10',
         generate_montage_video=False,
         apply_rotation_correction=True,
-        rotation_average_window=5,
+        rotation_average_window=10,
     )
