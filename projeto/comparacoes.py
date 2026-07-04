@@ -15,8 +15,8 @@ def convert_blink_format(blink_string):
         information for each frame in the .tag format.
     """
     frame_data = {}
-    # Split the input string by '#' to get individual blink annotations
-    blinks = blink_string.strip().split(' ')[1:]  # Ignore the first empty split
+    # Extract all blink annotations while ignoring any surrounding markup or extra text.
+    blinks = re.findall(r'\d+-\d+[ci]', blink_string)
 
     blink_counter = 1 # Initialize blink counter for sequential IDs
 
@@ -375,13 +375,11 @@ def calculate_frame_based_confusion_matrix_by_file_number(df_intersection_tag_to
                                              Used for TN based on 'target_start_frame'.
                                              Should include 'file_number' column.
 
-
     Returns:
         A DataFrame containing TP, FN, FP, TN counts based on frames for each file_number.
     """
     results = []
 
-    # Get all unique file numbers from the input dataframes
     all_file_numbers = pd.concat([
         df_intersection_tag_to_app['file_number'],
         df_intersection_app_to_tag['file_number'],
@@ -389,7 +387,6 @@ def calculate_frame_based_confusion_matrix_by_file_number(df_intersection_tag_to
     ]).unique()
 
     for file_number in all_file_numbers:
-        # Filter dataframes for the current file number
         df_tag_to_app_file = df_intersection_tag_to_app[
             df_intersection_tag_to_app['file_number'] == file_number
         ].copy()
@@ -400,7 +397,6 @@ def calculate_frame_based_confusion_matrix_by_file_number(df_intersection_tag_to
             df_intersection_open_eyes_tag_to_app['file_number'] == file_number
         ].copy()
 
-        # Calculate True Positives for the current file: Sum of frame durations for rows in df_tag_to_app_file with intersection
         df_tp_periods_file = df_tag_to_app_file[
             df_tag_to_app_file['target_start_frame'] != 'no intersection'
         ].copy()
@@ -410,8 +406,6 @@ def calculate_frame_based_confusion_matrix_by_file_number(df_intersection_tag_to
         else:
             true_positives = 0
 
-
-        # Calculate False Negatives for the current file: Sum of frame durations for rows in df_tag_to_app_file with 'no intersection'
         df_fn_periods_file = df_tag_to_app_file[
             df_tag_to_app_file['target_start_frame'] == 'no intersection'
         ].copy()
@@ -421,8 +415,6 @@ def calculate_frame_based_confusion_matrix_by_file_number(df_intersection_tag_to
         else:
             false_negatives = 0
 
-
-        # Calculate False Positives for the current file: Sum of frame durations for rows in df_app_to_tag_file with 'no intersection'
         df_fp_periods_file = df_app_to_tag_file[
             df_app_to_tag_file['target_start_frame'] == 'no intersection'
         ].copy()
@@ -432,8 +424,6 @@ def calculate_frame_based_confusion_matrix_by_file_number(df_intersection_tag_to
         else:
             false_positives = 0
 
-
-        # Calculate True Negatives for the current file: Sum of frame durations for rows in df_open_eyes_file with 'no intersection'
         df_tn_periods_file = df_open_eyes_file[
              df_open_eyes_file['target_start_frame'] == 'no intersection'
         ].copy()
@@ -452,3 +442,45 @@ def calculate_frame_based_confusion_matrix_by_file_number(df_intersection_tag_to
         })
 
     return pd.DataFrame(results)
+
+
+def calculate_frame_based_confusion_matrix_by_file_number_v2(all_df_matriz_confusao):
+    """
+    Calculates frame-based confusion-matrix counts by file_number using the
+    per-frame classification in column 'resultado'.
+
+    Expected columns in all_df_matriz_confusao:
+        - file_number
+        - resultado (values: TP, FN, FP, TN)
+
+    Returns:
+        A DataFrame containing TP, FN, FP, TN counts for each file_number.
+    """
+    required_columns = {'file_number', 'resultado'}
+    missing_columns = required_columns - set(all_df_matriz_confusao.columns)
+    if missing_columns:
+        raise ValueError(f"Missing required columns in all_df_matriz_confusao: {sorted(missing_columns)}")
+
+    df = all_df_matriz_confusao.copy()
+    df['resultado'] = df['resultado'].astype(str).str.upper()
+
+    grouped = (
+        df[df['resultado'].isin(['TP', 'FN', 'FP', 'TN'])]
+        .groupby(['file_number', 'resultado'])
+        .size()
+        .unstack(fill_value=0)
+    )
+
+    for label in ['TP', 'FN', 'FP', 'TN']:
+        if label not in grouped.columns:
+            grouped[label] = 0
+
+    grouped = grouped[['TP', 'FN', 'FP', 'TN']].reset_index()
+    grouped = grouped.rename(columns={
+        'TP': 'True Positives (TP)',
+        'FN': 'False Negatives (FN)',
+        'FP': 'False Positives (FP)',
+        'TN': 'True Negatives (TN)',
+    })
+
+    return grouped

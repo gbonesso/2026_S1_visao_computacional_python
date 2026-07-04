@@ -3,7 +3,7 @@ import pandas as pd
 import re
 from pathlib import Path
 
-from comparacoes import agrupa_marcacao, agrupa_olhos_abertos, calculate_frame_based_confusion_matrix_by_file_number, check_intersection_summary_blinks, load_data_unifesp
+from comparacoes import agrupa_marcacao, agrupa_olhos_abertos, calculate_frame_based_confusion_matrix_by_file_number_v2, check_intersection_summary_blinks, load_data_unifesp
 from blink_utils import aggregate_bilateral_blinks_new, analyze_csv_blinks
 
 def processar_diretorio(directory_path, salvar_arquivos_intermediarios=False):
@@ -15,6 +15,7 @@ def processar_diretorio(directory_path, salvar_arquivos_intermediarios=False):
     all_df_intersection_tag_to_app = pd.DataFrame()
     all_df_intersection_app_to_tag = pd.DataFrame()
     all_df_intersection_open_eyes_tag_to_app = pd.DataFrame()
+    all_df_matriz_confusao = pd.DataFrame()
 
     for filename in os.listdir(directory_path):
         if filename.endswith("marcacoes.txt"):
@@ -24,6 +25,7 @@ def processar_diretorio(directory_path, salvar_arquivos_intermediarios=False):
             print(f"Processing file #{file_number}: {file_path_unifesp}")
 
             df = load_data_unifesp(str(file_path_unifesp))
+            df_matriz_confusao = df.copy()  # Create a copy for confusion matrix calculations
             df_agregado = agrupa_marcacao(df)
 
             df_blinks = analyze_csv_blinks(
@@ -31,6 +33,33 @@ def processar_diretorio(directory_path, salvar_arquivos_intermediarios=False):
             )
 
             df_bilateral = aggregate_bilateral_blinks_new(df_blinks)
+
+            # Acrescente uma coluna blink_detected em df_matriz_confusao para indicar se houve detecção de blink
+            df_matriz_confusao['blink_detected'] = df_matriz_confusao.apply(
+                lambda row: any(
+                    (row['Frame_ID'] >= blink['start_frame'] and row['Frame_ID'] <= blink['end_frame'])
+                    for _, blink in df_bilateral.iterrows()
+                ),
+                axis=1
+            )
+
+            # Acrescente uma coluna resultado em df_matriz_confusao marcando como 'TP' caso
+            # blink_detected seja true e o Blink_ID seja diferente de -1. Marque como 'FN'caso Blink_ID 
+            # seja diferente de -1 e blink_detected seja false. Marque como 'FP' caso Blink_ID seja -1 e 
+            # blink_detected seja true. Marque como 'TN' caso Blink_ID seja -1 e blink_detected seja false.
+            def classify_row(row):
+                if row['blink_detected'] and row['Blink_ID'] != -1:
+                    return 'TP'
+                elif not row['blink_detected'] and row['Blink_ID'] != -1:
+                    return 'FN'
+                elif row['blink_detected'] and row['Blink_ID'] == -1:
+                    return 'FP'
+                elif not row['blink_detected'] and row['Blink_ID'] == -1:
+                    return 'TN'
+                else:
+                    return 'Unknown'
+                
+            df_matriz_confusao['resultado'] = df_matriz_confusao.apply(classify_row, axis=1)
 
             df_intersection_tag_to_app = check_intersection_summary_blinks(df_agregado, df_bilateral)
             df_intersection_app_to_tag = check_intersection_summary_blinks(df_bilateral, df_agregado)
@@ -40,6 +69,7 @@ def processar_diretorio(directory_path, salvar_arquivos_intermediarios=False):
             df_intersection_tag_to_app['file_number'] = file_number
             df_intersection_app_to_tag['file_number'] = file_number
             df_intersection_open_eyes_tag_to_app['file_number'] = file_number
+            df_matriz_confusao['file_number'] = file_number
 
             if salvar_arquivos_intermediarios:
                 df_agregado.to_excel(directory_path / f"{file_number}_df_agregado.xlsx", index=False)
@@ -52,10 +82,12 @@ def processar_diretorio(directory_path, salvar_arquivos_intermediarios=False):
                     directory_path / f"{file_number}_df_intersection_open_eyes_tag_to_app.xlsx",
                     index=False,
                 )
+                df_matriz_confusao.to_excel(directory_path / f"{file_number}_df_matriz_confusao.xlsx", index=False)
 
             all_df_intersection_tag_to_app = pd.concat([all_df_intersection_tag_to_app, df_intersection_tag_to_app], ignore_index=True)
             all_df_intersection_app_to_tag = pd.concat([all_df_intersection_app_to_tag, df_intersection_app_to_tag], ignore_index=True)
             all_df_intersection_open_eyes_tag_to_app = pd.concat([all_df_intersection_open_eyes_tag_to_app, df_intersection_open_eyes_tag_to_app], ignore_index=True)
+            all_df_matriz_confusao = pd.concat([all_df_matriz_confusao, df_matriz_confusao], ignore_index=True)
 
     print("\n--- Accumulated Results ---")
     print("Intersection Tag to App:")
@@ -64,11 +96,11 @@ def processar_diretorio(directory_path, salvar_arquivos_intermediarios=False):
     print(all_df_intersection_app_to_tag.head())
     print("\nIntersection Open Eyes Tag to App:")
     print(all_df_intersection_open_eyes_tag_to_app.head())
+    print("\nConfusion Matrix Results:")
+    print(all_df_matriz_confusao.head())
 
-    confusion_matrix_results = calculate_frame_based_confusion_matrix_by_file_number(
-        all_df_intersection_tag_to_app,
-        all_df_intersection_app_to_tag,
-        all_df_intersection_open_eyes_tag_to_app,
+    confusion_matrix_results = calculate_frame_based_confusion_matrix_by_file_number_v2(
+        all_df_matriz_confusao,
     )
     print(confusion_matrix_results)
 
@@ -120,6 +152,7 @@ def processar_diretorio(directory_path, salvar_arquivos_intermediarios=False):
         'all_df_intersection_tag_to_app': all_df_intersection_tag_to_app,
         'all_df_intersection_app_to_tag': all_df_intersection_app_to_tag,
         'all_df_intersection_open_eyes_tag_to_app': all_df_intersection_open_eyes_tag_to_app,
+        'all_df_matriz_confusao': all_df_matriz_confusao,
         'confusion_matrix_results': confusion_matrix_results,
         'metrics_df': metrics_df,
         'metrics_output_path': metrics_output_path,
@@ -127,5 +160,8 @@ def processar_diretorio(directory_path, salvar_arquivos_intermediarios=False):
 
 
 if __name__ == '__main__':
-    processar_diretorio('./projeto/videos_output_com_rotacao_com_med_ang_5/', salvar_arquivos_intermediarios=False)
+    processar_diretorio(
+        './projeto/videos_output_com_rotacao_com_med_ang_3/', 
+        salvar_arquivos_intermediarios=True,
+    )
 

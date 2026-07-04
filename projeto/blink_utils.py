@@ -184,11 +184,11 @@ def analyze_csv_blinks(file_path: str) -> pd.DataFrame:
         raise ValueError(f'Missing required columns in CSV: {sorted(missing_columns)}')
 
     def normalize_series(series: pd.Series) -> pd.Series:
-        min_value = series.min()
-        max_value = series.max()
-        if pd.isna(min_value) or pd.isna(max_value) or max_value == min_value:
-            return pd.Series(0.0, index=series.index)
-        return (series - min_value) / (max_value - min_value)
+        rolling_min = series.rolling(window=500, center=True, min_periods=1).min()
+        rolling_max = series.rolling(window=500, center=True, min_periods=1).max()
+        value_range = rolling_max - rolling_min
+        normalized = (series - rolling_min) / value_range
+        return normalized.fillna(0.0)
 
     df['left_opening_after_rotation'] = pd.to_numeric(df['left_opening_after_rotation'], errors='coerce')
     df['right_opening_after_rotation'] = pd.to_numeric(df['right_opening_after_rotation'], errors='coerce')
@@ -226,10 +226,15 @@ def analyze_csv_blinks(file_path: str) -> pd.DataFrame:
 
 def aggregate_bilateral_blinks_new(df_blinks, only_complete_blinks=False):
     if only_complete_blinks:
-        df_blinks = df_blinks[df_blinks['blink_type'] == 'complete'].copy()
+        df_blinks = df_blinks[
+            df_blinks['blink_type'].astype(str).str.endswith('complete')
+        ].copy()
 
     df_left = df_blinks[df_blinks['eye'] == 'Eye.left'].copy()
     df_right = df_blinks[df_blinks['eye'] == 'Eye.right'].copy()
+
+    if df_left.empty or df_right.empty:
+        return pd.DataFrame(columns=['id', 'start_frame', 'end_frame'])
 
     # Merge cruzado (combina todas as piscadas)
     df_cross = df_left.merge(df_right, how='cross', suffixes=('_left', '_right'))
@@ -244,7 +249,27 @@ def aggregate_bilateral_blinks_new(df_blinks, only_complete_blinks=False):
     aggregated_blinks = bilateral_blinks.assign(
         start_frame = bilateral_blinks[['start_frame_left', 'start_frame_right']].min(axis=1),
         end_frame   = bilateral_blinks[['end_frame_left',  'end_frame_right']].max(axis=1)
-    )[['start_frame', 'end_frame']].drop_duplicates().reset_index(drop=True)
+    )[['start_frame', 'end_frame']].drop_duplicates().sort_values(
+        by=['start_frame', 'end_frame']
+    ).reset_index(drop=True)
+
+    # Mescla intervalos que ainda ficaram sobrepostos após o merge cruzado.
+    merged_ranges = []
+    for row in aggregated_blinks.itertuples(index=False):
+        start_frame = int(row.start_frame)
+        end_frame = int(row.end_frame)
+
+        if not merged_ranges:
+            merged_ranges.append([start_frame, end_frame])
+            continue
+
+        last_start, last_end = merged_ranges[-1]
+        if start_frame <= last_end + 1:
+            merged_ranges[-1][1] = max(last_end, end_frame)
+        else:
+            merged_ranges.append([start_frame, end_frame])
+
+    aggregated_blinks = pd.DataFrame(merged_ranges, columns=['start_frame', 'end_frame'])
 
     # Adiciona id sequencial
     aggregated_blinks['id'] = aggregated_blinks.index + 1
